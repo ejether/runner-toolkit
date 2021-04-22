@@ -1,0 +1,190 @@
+#!/usr/bin/env bash
+
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#  http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+function task_default() {
+    DOC="Default task. Prints usage information."
+
+    runner_log_warning "No task specified"
+    cat <<EOF
+
+Welcome to $(basename "$0") tasks:
+
+Usage:
+"$(basename "$0") <task_name> [--<option1>=<value1> .. --<optionN>=<valueN>]"
+
+- multiple tasks may be specified and will be run in order
+- multiple options may be specified per task
+
+Try:
+"$(basename "$0") help" to see a list of available tasks and documentation
+
+EOF
+
+}
+
+function task_help() {
+    DOC="Outputs each runner task that has a help string."
+    set -u
+    dir=$(dirname "${BASH_SOURCE[0]}")
+    for task in $(runner_get_defined_tasks); do
+        doc_string=$(grep -r -A1 -h "task_$task(" "${dir}" | grep "DOC=" | sed 's/^.*\DOC\=//')
+        required_vars=$(grep -r -A5 -h "task_$task(" "${dir}" | grep "required_vars=" | sed 's/^.*\required_vars\=//')
+        if [ -n "${doc_string}" ]; then
+            runner_colorize purple "${task}:"
+            runner_colorize cyan "    $doc_string"
+        fi
+        if [ -n "${required_vars}" ]; then
+            runner_colorize cyan "    Required options: ${required_vars,,}"
+        fi
+    done
+}
+
+function task_show_task() {
+    DOC="Output the body of the specified task. Specify the task in question with '--task=<name>'"
+
+    parse_args $@
+    required_vars=( 'TASK' )
+    check_required_vars || return
+
+    files_to_check+=(ls $(dirname ${BASH_SOURCE[0]})/*.sh)
+
+    type task_$TASK
+}
+
+### GLOBAL HELPER FUNCTIONS ###
+function parse_args() {
+    # Accepts $@ in the form of "--arg=value" or "--arg" and sets a variable
+    # with the uppper cased "$ARG" with the value. If "-arg" form is used, then the value
+    # is "true"
+
+    # Example "--foo=bar" with result in ${FOO} being set to the value "bar"
+
+    # Use this with any task you expect to accept args and "set -u" in your task
+    # to reduce accidental errors due to unset variables
+
+    for arg in "${@}"; do
+        unset key
+        unset value
+        # If it doesn't start with -- fail
+        if [[ "${arg}" != --* ]]; then
+            runner_log_error "Error with Argument ${arg}. Must be in the form --<name>=<value>"
+            return 1
+        fi
+        # Remove --
+        key_pair="${arg//--/}"
+        # Split on "=" and get the key value
+        key="$(echo "${key_pair}" | awk -F= '{ print $1 }')"
+        value="$(echo "${key_pair}" | awk -F= '{ print $2 }')"
+        # set value to true if one is not provided
+        if [ -z "${value}" ]; then
+            value=true
+        fi
+        # Eval here does the variable variable setting
+        # ^^ uppercases the variable name
+        # shellcheck disable=SC2140
+        eval export "${key^^}"="\${value}"
+    done
+}
+
+function check_required_vars() {
+    # Loops over ${required_vars} and tabulates missing vars
+    # Logs each one and returns error if there are missing ones
+    error_found=false
+    for var in "${required_vars[@]}"; do
+        tmp_var="${!var}"
+        if [ -z "${tmp_var}" ]; then
+            ## ,, here changes to lowercase for user output
+            runner_log_error "Missing argument --${var,,}"
+            error_found=true
+        fi
+        unset tmp_var
+    done
+    if [ "${error_found}" == "true" ]; then
+        return 1
+    fi
+}
+
+
+function confirm() {
+    # Provides a `confirm` function.
+    if [ "${YES}" = true ]; then
+        echo "Skipping confirmation due to \${YES}"
+        return
+    fi
+
+    read -r -t 10 -p "Type \"YES\" within 10s to proceed: $1" response
+    echo
+    if [ "${response}" != "YES" ]; then
+        runner_log_error "Task will not proceed"
+        exit 1
+    fi
+}
+
+function spinner()
+{
+  spinner="/|\\-/|\\-"
+  while :
+  do
+    for i in `seq 0 7`
+    do
+      #echo -n "${spinner:$i:1}"
+      printf "\e[1;34m${spinner:$i:1}\e[0m"
+      echo -en "\010"
+      sleep 1
+    done
+  done
+}
+
+function spin(){
+    # Start the Spinner:
+    spinner &
+    # Make a note of its Process ID (PID):
+    export SPIN_PID=$!
+    # Kill the spinner on any signal, including our own exit.
+    trap "kill -9 $SPIN_PID" `seq 0 15`
+}
+
+function unspin(){
+  # Remove spinner
+  kill -9 $SPIN_PID
+}
+
+
+### Source the task files ###
+
+# shellcheck disable=SC1090
+# shellcheck disable=SC2140
+# If location is a directory, source all the files
+# If location is a file source it.
+# Using sed to replace `:` so we don't mess with IFS so the `for files` works below
+for LOCATION in $(echo $RUNNER_TOOLKIT_TASK_LOCATIONS | sed 's/:/ /'); do
+    if [ -d "${LOCATION}" ]; then
+        for FILE in $(ls ${LOCATION}); do
+            source "${LOCATION}/${FILE}"
+        done
+    elif [ -f "${LOCATION}" ]; then
+        source "${LOCATION}"
+    fi
+done
+
+# Always source a runner file if there is one where the command is run.
+# As long as the ./Runnerfile and this file are not the same file
+if [ -f "./Runnerfile" ]; then
+    cmp --silent "${BASH_SOURCE[0]}" ./Runnerfile || source ./Runnerfile
+fi
