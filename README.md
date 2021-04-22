@@ -141,7 +141,7 @@ I guess you're sure
 
 * `spin`/`unspin`
     * Provides a mini ascii spinner for to bracket long running tasks
-    * invoke `spin` before a long running task and involde `unspin` following it.
+    * invoke `spin` before a long running task and invoke `unspin` following it.
     * Example:
 ```
 function task_spinner_example(){
