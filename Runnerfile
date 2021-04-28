@@ -165,6 +165,16 @@ function unspin(){
   kill -9 $SPIN_PID
 }
 
+### Override Runner Standard Functions
+# Some Runner functions don't behave as I would prefer.
+# This overrides them.
+
+## Logs a message with a timestamp to stderr (instead of stdout)
+# This allows easy piping of task output into other commands
+function runner_log() {
+  local timestamp="$(runner_date +%T.%3N)"
+  echo "[$(runner_colorize gray "${timestamp}")] ${*}" >&2;
+}
 
 ### Source the task files ###
 
