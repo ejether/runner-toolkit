@@ -19,7 +19,7 @@ function ensure_awscli() {
 function ensure_aws_login() {
     # Check for exiting session, if fails, create one, else return
     aws_set_profile
-    ensure_awscli || { runner aws_sso_login || return 1; }
+    ensure_awscli || { runner aws-sso-login || return 1; }
 }
 
 function aws_account() {
@@ -59,53 +59,8 @@ function eks_clusters() {
 
 ### TASKS ###
 
-function task_aws_key_find_owner() {
-    DOC="Finds the IAM username of the owner of the AWS IAM KeyId entered as --keyid=<awsiamkeyid>"
-    required_vars=('KEYID')
-    parse_args "$@"
-    check_required_vars || return 1
-    ensure_aws_login || return 1
 
-    for username in $(aws iam list-users | jq '.Users[].UserName' -r); do
-        for key in $(aws iam list-access-keys --user "$username" | jq '.AccessKeyMetadata[].AccessKeyId' -r); do
-            if [ "${key}" == "${KEYID}" ]; then
-                echo "This key id belongs to: ${username}"
-                return 0
-            fi
-        done
-    done
-
-    runner_log_warning "The key, '${KEYID}', was not found."
-    set +u
-    return 1
-}
-
-function task_aws_parameter_store_list_parameters() {
-    DOC="Lists Parameters in the specified region. Uses all region unless specified as --aws_region=<region>"
-    parse_args "$@"
-    required_vars=()
-    check_required_vars
-    ensure_aws_login || return 1
-    if [ -z "${AWS_REGION}" ]; then
-        for region in "${AWS_REGIONS[@]}"; do
-            runner_colorize green "REGION: ${region}"
-            aws --region="${region}" ssm describe-parameters | jq -r '.Parameters[].Name'
-        done
-    else
-        aws ssm describe-parameters | jq -r '.Parameters[].Name'
-    fi
-}
-
-function task_aws_parameter_store_get_value() {
-    DOC="Retreives the value of the parameter specified. Decrypts if necessary. Uses Default region unless specified as --aws_region=<region> "
-    required_vars=('PARAMETER')
-    parse_args "$@"
-    check_required_vars
-    ensure_aws_login || return 1
-    aws ssm get-parameter --name="${PARAMETER}" --with-decryption | jq -r '.Parameter.Value'
-}
-
-function task_aws_vault_login() {
+function task_aws-vault-login() {
     DOC="Creats a console login for the specified profile. If you do not specify a profile, you will be asked to choose one. Option --aws_profile=<profile to set>"
     parse_args "$@"
     aws_set_profile
@@ -113,7 +68,7 @@ function task_aws_vault_login() {
     aws-vault login "${AWS_PROFILE}"
 }
 
-function task_aws_vault_exec() {
+function task_aws-vault-exec() {
     DOC="Creates a console loin for the specified profile. If you do not specify a profile, you will be asked to choose one. Option --aws_profile=<profile to set>"
     parse_args "$@"
     aws_set_profile
@@ -122,14 +77,14 @@ function task_aws_vault_exec() {
     aws-vault exec "${AWS_PROFILE}"
 }
 
-function task_aws_sso_login() {
+function task_aws-sso-login() {
     DOC="Renews SSO session login for the specified profile. If you do not specify a profile, you will be asked to choose one. Option --aws_profile=<profile to set>"
     parse_args "$@"
     aws_set_profile
     aws sso login || return 1
 }
 
-function task_ecr_login() {
+function task_ecr-login() {
     DOC="Log docker into ECR. Requires --registry=<registry>"
     required_vars=('REGISTRY')
     parse_args "$@"
@@ -139,7 +94,7 @@ function task_ecr_login() {
     aws ecr get-login-password | docker login --username AWS --password-stdin "${REGISTRY}"
 }
 
-function task_aws_eks_cluster_auth() {
+function task_aws-eks-cluster-auth() {
     DOC="Configure terminal session to connect to a cluster"
 
     parse_args "$@"
@@ -164,9 +119,16 @@ function task_aws_eks_cluster_auth() {
     done
 }
 
-function task_aws_test() {
+function task_aws-test() {
     DOC="Tests aws cli config"
     parse_args "$@"
     ensure_aws_login || return 1
     aws sts get-caller-identity
+}
+
+
+function task_aws-list-unattached-volumes(){
+    parse_args "$@"
+    ensure_aws_login || return 1
+    aws ec2 describe-volumes | jq -r '.Volumes[] | select(.Attachments==[]) | .VolumeId'
 }
