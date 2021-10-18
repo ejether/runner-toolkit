@@ -17,7 +17,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
-function task_default() {
+task_default() {
     DOC="Default task. Prints usage information."
 
     runner_log_warning "No task specified"
@@ -38,7 +38,7 @@ EOF
 
 }
 
-function task_help() {
+task_help() {
     DOC="Outputs each runner task that has a help string."
     set -u
     dir=$(dirname "${BASH_SOURCE[0]}")
@@ -55,7 +55,7 @@ function task_help() {
     done
 }
 
-function task_show_task() {
+task_show-task() {
     DOC="Output the body of the specified task. Specify the task in question with '--task=<name>'"
 
     parse_args $@
@@ -68,7 +68,7 @@ function task_show_task() {
 }
 
 ### GLOBAL HELPER FUNCTIONS ###
-function parse_args() {
+parse_args() {
     # Accepts $@ in the form of "--arg=value" or "--arg" and sets a variable
     # with the uppper cased "$ARG" with the value. If "-arg" form is used, then the value
     # is "true"
@@ -102,7 +102,30 @@ function parse_args() {
     done
 }
 
-function check_required_vars() {
+select_from_with_grep(){
+  # Take command to generate a list and an optional grep term
+  # Displays grep-ed select or auto selects if there is only one item
+  # that matches the grep term
+  command="$1"
+  term="$2"
+
+  if [[ -n "$term" ]]; then
+      list=$(eval $command | grep $term)
+    else
+      list=$(eval $command)
+    fi
+    count=$(echo $list | wc -w)
+    if [[ "${count}" -eq 1 ]]; then
+      item="$list"
+    else
+      select item in $list; do
+          break
+      done
+    fi
+    echo "$item"
+}
+
+check_required_vars() {
     # Loops over ${required_vars} and tabulates missing vars
     # Logs each one and returns error if there are missing ones
     error_found=false
@@ -203,3 +226,31 @@ done
 if [ -f "./Runnerfile" ]; then
     cmp --silent "${BASH_SOURCE[0]}" ./Runnerfile || source ./Runnerfile
 fi
+
+declare -a runner_extra_args=()
+## Starts the initial task.
+runner_bootstrap() {
+  ## Clear a trap we set up earlier
+  trap - EXIT
+  ## Parse arguments
+  for arg in "${runner_args[@]+"${runner_args[@]}"}"; do
+    if [[ ${arg} == -* ]]; then
+      runner_flags+=("${arg}")
+    elif runner_is_defined "task_${arg}"; then
+      runner_tasks+=("${arg}")
+    else
+      runner_extra_args+=("${arg}")
+    fi
+  done
+  ## Run tasks
+  if [[ ${#runner_tasks[@]} -gt 0 ]]; then
+    runner_sequence "${runner_tasks[@]}" || exit ${?}
+    return 0
+  fi
+  if runner_is_task_defined "${runner_default_task}"; then
+    runner_run_task "${runner_default_task}" || exit ${?}
+    return 0
+  fi
+  ## Nothing to run
+  runner_show_defined_tasks
+}

@@ -1,8 +1,22 @@
 #!/usr/bin/env bash
 
-### SETTINGS ###
-# Configuring aws-vault
-export AWS_REGIONS=("us-west-2" "us-west-1" "us-east-1" "us-east-2")
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#  http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 export AWS_SESSION_TOKEN_TTL=12h
 export AWS_ASSUME_ROLE_TTL=12h
 export AWS_MIN_TTL=12h
@@ -30,9 +44,14 @@ function aws_account() {
 
 function aws_set_profile() {
     # lists and sets menu of local profiles if AWS_PROFILE is not set
-    if [ -z "${AWS_PROFILE}" ]; then
+    if [[ -n "$AWS_ACCESS_KEY_ID" ]]; then
+        runner_log_notice "AWS_ACCESS_KEY_ID set. Skipping Profile Choice."
+        return
+    fi
+
+    if [[ -z "${AWS_PROFILE}" ]]; then
         runner_colorize purple "Choose a profile to use:"
-        select profile in $(aws configure list-profiles); do
+        select profile in $(aws configure list-profiles | sort); do
             export AWS_PROFILE="${profile}"
             break
         done
@@ -51,7 +70,7 @@ function eks_clusters() {
     # returns a list of clusters in a limited set of regions
     EKS_CLUSTERS=()
     for region in "${AWS_REGIONS[@]}"; do
-        for cluster in $(aws eks list-clusters --region "${region}" | jq -r '.clusters[]'); do
+        for cluster in $(aws eks list-clusters --region "${region}" | jq -r '.clusters[]' | sort); do
             EKS_CLUSTERS+=("${cluster}@${region}")
         done
     done
@@ -132,3 +151,44 @@ function task_aws-list-unattached-volumes(){
     ensure_aws_login || return 1
     aws ec2 describe-volumes | jq -r '.Volumes[] | select(.Attachments==[]) | .VolumeId'
 }
+
+function task_aws-remove-unattached-volumes(){
+    parse_args "$@"
+    ensure_aws_login || return 1
+    for vol in $(aws ec2 describe-volumes | jq -r '.Volumes[] | select(.Attachments==[]) | .VolumeId'); do echo $vol; aws ec2 delete-volume --volume-id="${vol}"; done
+}
+
+task_aws-s3-bucket-destroy() {
+    DOC="Removes an AWS S3 bucket and all its version completely."
+    parse_args "$@"
+    required_vars=('BUCKET')
+    runner_log_notice "Bucket: ${BUCKET}"
+    confirm "${BUCKET} infrastructure bucket destroy: "
+    ensure_aws_login || return 1
+
+    aws s3 ls s3://${BUCKET} || exit 0 &&
+        aws s3api list-object-versions --bucket ${BUCKET} | jq -r '.Versions[] | .VersionId + " " + .Key' >|.tmp &&
+        while read version; do
+            echo $version
+            vid=$(echo $version | awk '{ print $1 }')
+            key=$(echo $version | awk '{ print $2 }')
+            aws s3api delete-object --bucket ${BUCKET} --version-id ${vid} --key ${key}
+        done <.tmp &&
+        rm .tmp &&
+        aws s3api list-object-versions --bucket ${BUCKET} | jq -r '.DeleteMarkers[] | .VersionId + " " + .Key' >|.tmp &&
+        while read version; do
+            echo $version
+            vid=$(echo $version | awk '{ print $1 }')
+            key=$(echo $version | awk '{ print $2 }')
+            aws s3api delete-object --bucket ${BUCKET} --version-id ${vid} --key ${key}
+            echo $?
+        done <.tmp &&
+        rm .tmp &&
+        aws s3api delete-bucket --bucket ${BUCKET}
+}
+
+task_aws-instanceid-from-private-dns(){
+    DOC="Retrieves the Instance ID from the Private DNS name of the host. Usefule for Kubectl get nodes. "
+    parse_args "$@"
+    required_vars=('DNSNAME')
+    aws ec2 describe-instances | jq -r '.Reservations[].Instances[] | select( .PrivateDnsName == "'$NAME'") | .InstanceId'
