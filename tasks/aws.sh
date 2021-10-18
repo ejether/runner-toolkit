@@ -192,3 +192,4 @@ task_aws-instanceid-from-private-dns(){
     parse_args "$@"
     required_vars=('DNSNAME')
     aws ec2 describe-instances | jq -r '.Reservations[].Instances[] | select( .PrivateDnsName == "'$NAME'") | .InstanceId'
+}
