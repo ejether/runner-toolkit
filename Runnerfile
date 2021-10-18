@@ -89,7 +89,7 @@ parse_args() {
         # Remove --
         key_pair="${arg//--/}"
         # Split on "=" and get the key value
-        key="$(echo "${key_pair}" | awk -F= '{ print $1 }')"
+        key="$(echo "${key_pair}" | awk -F= '{ print $1 }' | sed 's/-/_/')"
         value="$(echo "${key_pair}" | awk -F= '{ print $2 }')"
         # set value to true if one is not provided
         if [ -z "${value}" ]; then
@@ -132,9 +132,14 @@ check_required_vars() {
     for var in "${required_vars[@]}"; do
         tmp_var="${!var}"
         if [ -z "${tmp_var}" ]; then
-            ## ,, here changes to lowercase for user output
-            runner_log_error "Missing argument --${var,,}"
-            error_found=true
+            if true; then #Prompt for missing required vars. Logic left as handle
+                runner_colorize green "Enter ${var}:"
+                read $(echo ${var})
+            else
+              # ,, here changes to lowercase for user output
+              runner_log_error "Missing argument --${var,,}"
+              error_found=true
+            fi
         fi
         unset tmp_var
     done

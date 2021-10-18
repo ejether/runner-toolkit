@@ -17,9 +17,6 @@
 # specific language governing permissions and limitations
 # under the License.
 
-### SETTINGS ###
-# Configuring aws-vault
-#export AWS_REGIONS=("us-west-2" "us-west-1" "us-east-1" "us-east-2")
 export AWS_SESSION_TOKEN_TTL=12h
 export AWS_ASSUME_ROLE_TTL=12h
 export AWS_MIN_TTL=12h
@@ -195,4 +192,3 @@ task_aws-instanceid-from-private-dns(){
     parse_args "$@"
     required_vars=('DNSNAME')
     aws ec2 describe-instances | jq -r '.Reservations[].Instances[] | select( .PrivateDnsName == "'$NAME'") | .InstanceId'
-}
