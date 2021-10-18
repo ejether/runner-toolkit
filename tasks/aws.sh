@@ -22,7 +22,7 @@ export AWS_ASSUME_ROLE_TTL=12h
 export AWS_MIN_TTL=12h
 
 ### HELPERS ###
-function ensure_awscli() {
+ensure_awscli() {
     # Ensure awscli is available
     aws sts get-caller-identity >/dev/null || {
         runner_log_error "Error with aws access"
@@ -30,19 +30,19 @@ function ensure_awscli() {
     }
 }
 
-function ensure_aws_login() {
+ensure_aws_login() {
     # Check for exiting session, if fails, create one, else return
     aws_set_profile
     ensure_awscli || { runner aws-sso-login || return 1; }
 }
 
-function aws_account() {
+aws_account() {
     # returns account number
     ensure_aws_login
     aws sts get-caller-identity | jq -r '.Account'
 }
 
-function aws_set_profile() {
+aws_set_profile() {
     # lists and sets menu of local profiles if AWS_PROFILE is not set
     if [[ -n "$AWS_ACCESS_KEY_ID" ]]; then
         runner_log_notice "AWS_ACCESS_KEY_ID set. Skipping Profile Choice."
@@ -58,7 +58,7 @@ function aws_set_profile() {
     fi
 }
 
-function ensure_aws_vault() {
+ensure_aws_vault() {
     # tests presense of aws-vault
     command aws-vault 2>/dev/null || {
         runner_log_error "aws-vault is not installed"
@@ -66,7 +66,7 @@ function ensure_aws_vault() {
     }
 }
 
-function eks_clusters() {
+eks_clusters() {
     # returns a list of clusters in a limited set of regions
     EKS_CLUSTERS=()
     for region in "${AWS_REGIONS[@]}"; do
@@ -79,7 +79,7 @@ function eks_clusters() {
 ### TASKS ###
 
 
-function task_aws-vault-login() {
+task_aws-vault-login() {
     DOC="Creats a console login for the specified profile. If you do not specify a profile, you will be asked to choose one. Option --aws_profile=<profile to set>"
     parse_args "$@"
     aws_set_profile
@@ -87,7 +87,7 @@ function task_aws-vault-login() {
     aws-vault login "${AWS_PROFILE}"
 }
 
-function task_aws-vault-exec() {
+task_aws-vault-exec() {
     DOC="Creates a console loin for the specified profile. If you do not specify a profile, you will be asked to choose one. Option --aws_profile=<profile to set>"
     parse_args "$@"
     aws_set_profile
@@ -96,14 +96,14 @@ function task_aws-vault-exec() {
     aws-vault exec "${AWS_PROFILE}"
 }
 
-function task_aws-sso-login() {
+ask_aws-sso-login() {
     DOC="Renews SSO session login for the specified profile. If you do not specify a profile, you will be asked to choose one. Option --aws_profile=<profile to set>"
     parse_args "$@"
     aws_set_profile
     aws sso login || return 1
 }
 
-function task_ecr-login() {
+task_ecr-login() {
     DOC="Log docker into ECR. Requires --registry=<registry>"
     required_vars=('REGISTRY')
     parse_args "$@"
@@ -113,7 +113,7 @@ function task_ecr-login() {
     aws ecr get-login-password | docker login --username AWS --password-stdin "${REGISTRY}"
 }
 
-function task_aws-eks-cluster-auth() {
+task_aws-eks-cluster-auth() {
     DOC="Configure terminal session to connect to a cluster"
 
     parse_args "$@"
@@ -138,7 +138,7 @@ function task_aws-eks-cluster-auth() {
     done
 }
 
-function task_aws-test() {
+task_aws-test() {
     DOC="Tests aws cli config"
     parse_args "$@"
     ensure_aws_login || return 1
@@ -146,13 +146,13 @@ function task_aws-test() {
 }
 
 
-function task_aws-list-unattached-volumes(){
+task_aws-list-unattached-volumes(){
     parse_args "$@"
     ensure_aws_login || return 1
     aws ec2 describe-volumes | jq -r '.Volumes[] | select(.Attachments==[]) | .VolumeId'
 }
 
-function task_aws-remove-unattached-volumes(){
+task_aws-remove-unattached-volumes(){
     parse_args "$@"
     ensure_aws_login || return 1
     for vol in $(aws ec2 describe-volumes | jq -r '.Volumes[] | select(.Attachments==[]) | .VolumeId'); do echo $vol; aws ec2 delete-volume --volume-id="${vol}"; done
