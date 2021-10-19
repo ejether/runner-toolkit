@@ -96,7 +96,7 @@ task_aws-vault-exec() {
     aws-vault exec "${AWS_PROFILE}"
 }
 
-ask_aws-sso-login() {
+task_aws-sso-login() {
     DOC="Renews SSO session login for the specified profile. If you do not specify a profile, you will be asked to choose one. Option --aws_profile=<profile to set>"
     parse_args "$@"
     aws_set_profile
