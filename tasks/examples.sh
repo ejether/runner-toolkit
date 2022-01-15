@@ -17,14 +17,14 @@
 # specific language governing permissions and limitations
 # under the License.
 
-function task_parse_args_example(){
+task_exmple-parse-args(){
     DOC="Example task for 'parse_args'. Accepts --foo and --baz; outputs the values."
     parse_args "${@}"
     echo "FOO=${FOO}"
     echo "BAZ=${BAZ}"
 }
 
-function task_required_args_example(){
+task_example-required-args(){
     DOC="Example task for 'check_required_args'. Requires --foo and --baz."
     required_vars=('FOO' 'BAZ')
     parse_args "$@"
@@ -35,18 +35,25 @@ function task_required_args_example(){
     echo "BAZ=${BAZ}"
 }
 
-function task_confirm_example(){
+task_example-confirm(){
     DOC="Example task for 'confirm'."
     runner_colorize red ARE YOU SURE?
     confirm
     runner_colorize green "I guess you're sure"
 }
 
-function task_spin_example(){
+task_example-spin(){
     DOC="Example task for 'spinner' and 'unspin'."
     runner_colorize pink "Starting Sleep"
     spin
     sleep 10
     unspin
     runner_colorize pint "Stopping"
+}
+
+task_example-choice-with-argument(){
+  DOC="Example task for using arguments to help a select. You will get a menu item from each line"
+  choices="echo this is a command to generate some choices"
+  choice=$(select_from_with_grep "$choices"  ${runner_extra_args[0]})
+  runner_log_notice "$choice selected"
 }

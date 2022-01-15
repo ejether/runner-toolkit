@@ -69,6 +69,7 @@ ensure_aws_vault() {
 eks_clusters() {
     # returns a list of clusters in a limited set of regions
     EKS_CLUSTERS=()
+    AWS_REGIONS=("us-west-2")
     for region in "${AWS_REGIONS[@]}"; do
         for cluster in $(aws eks list-clusters --region "${region}" | jq -r '.clusters[]' | sort); do
             EKS_CLUSTERS+=("${cluster}@${region}")
@@ -96,7 +97,7 @@ task_aws-vault-exec() {
     aws-vault exec "${AWS_PROFILE}"
 }
 
-ask_aws-sso-login() {
+task_aws-sso-login() {
     DOC="Renews SSO session login for the specified profile. If you do not specify a profile, you will be asked to choose one. Option --aws_profile=<profile to set>"
     parse_args "$@"
     aws_set_profile
@@ -160,8 +161,8 @@ task_aws-remove-unattached-volumes(){
 
 task_aws-s3-bucket-destroy() {
     DOC="Removes an AWS S3 bucket and all its version completely."
-    parse_args "$@"
     required_vars=('BUCKET')
+    parse_args "$@"
     runner_log_notice "Bucket: ${BUCKET}"
     confirm "${BUCKET} infrastructure bucket destroy: "
     ensure_aws_login || return 1
@@ -189,7 +190,8 @@ task_aws-s3-bucket-destroy() {
 
 task_aws-instanceid-from-private-dns(){
     DOC="Retrieves the Instance ID from the Private DNS name of the host. Usefule for Kubectl get nodes. "
+    DNSNAME=${DNSNAME:-${runner_extra_args[0]}}
     parse_args "$@"
     required_vars=('DNSNAME')
-    aws ec2 describe-instances | jq -r '.Reservations[].Instances[] | select( .PrivateDnsName == "'$NAME'") | .InstanceId'
+    aws ec2 describe-instances | jq -r '.Reservations[].Instances[] | select( .PrivateDnsName == "'$DNSNAME'")'
 }

@@ -110,7 +110,7 @@ select_from_with_grep(){
   term="$2"
 
   if [[ -n "$term" ]]; then
-      list=$(eval $command | grep $term)
+      list=$(eval $command | grep -o $term)
     else
       list=$(eval $command)
     fi

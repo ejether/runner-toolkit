@@ -12,7 +12,7 @@ I'm a big fan of `runner` but I found myself repeating a lot of helper functions
 ## Initialization
 
 1. Configure shell:
-    1. From the root of the repo: `eval $(bash ./setup.sh)` or, to make enable it permanently use `base ./setup.sh >> .bash_profile` (or equivalent for your shell)
+    1. From the root of the repo: `eval $(bash ./setup.sh)` or, to make enable it permanently use `bash ./setup.sh >> .bash_profile` (or equivalent for your shell)
     1. **If you move your code directory or rename any files, you'll need to re-run the above steps**
 
 1. If you want to use this as another command you can set `RUNNER_TOOLKIT_ALIAS` before running `./setup.sh` and it will alias the command and configure shell completion for the alias as well.
