@@ -69,6 +69,7 @@ ensure_aws_vault() {
 eks_clusters() {
     # returns a list of clusters in a limited set of regions
     EKS_CLUSTERS=()
+    AWS_REGIONS=("us-west-2")
     for region in "${AWS_REGIONS[@]}"; do
         for cluster in $(aws eks list-clusters --region "${region}" | jq -r '.clusters[]' | sort); do
             EKS_CLUSTERS+=("${cluster}@${region}")
@@ -119,9 +120,9 @@ task_aws-eks-cluster-auth() {
     parse_args "$@"
     ensure_aws_login || return 1
     runner_colorize purple "Collecting Possible Clusters:"
-    spinner
+    #spinner
     eks_clusters
-    unspin
+    #unspin
 
     select cluster_region in "${EKS_CLUSTERS[@]}"; do
         CLUSTER=$(echo "${cluster_region}" | awk -F'@' '{ print $1 }')
@@ -160,8 +161,8 @@ task_aws-remove-unattached-volumes(){
 
 task_aws-s3-bucket-destroy() {
     DOC="Removes an AWS S3 bucket and all its version completely."
-    parse_args "$@"
     required_vars=('BUCKET')
+    parse_args "$@"
     runner_log_notice "Bucket: ${BUCKET}"
     confirm "${BUCKET} infrastructure bucket destroy: "
     ensure_aws_login || return 1
@@ -189,7 +190,8 @@ task_aws-s3-bucket-destroy() {
 
 task_aws-instanceid-from-private-dns(){
     DOC="Retrieves the Instance ID from the Private DNS name of the host. Usefule for Kubectl get nodes. "
+    DNSNAME=${DNSNAME:-${runner_extra_args[0]}}
     parse_args "$@"
     required_vars=('DNSNAME')
-    aws ec2 describe-instances | jq -r '.Reservations[].Instances[] | select( .PrivateDnsName == "'$NAME'") | .InstanceId'
+    aws ec2 describe-instances | jq -r '.Reservations[].Instances[] | select( .PrivateDnsName == "'$DNSNAME'")'
 }

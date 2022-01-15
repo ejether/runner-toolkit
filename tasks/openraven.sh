@@ -104,8 +104,9 @@ task_tsh-db-workspace(){
 }
 
 task_tsh-db(){
-
   parse_args "$@"
+  ensure_tsh_login || return 1
+  set -e
   choice=$(select_from_with_grep "tsh kube ls | tail -n +3 | uniq | awk '{ print \$1 }' | sort"  ${runner_extra_args[0]})
   task_tsh-db-workspace --workspace="$choice"
 
