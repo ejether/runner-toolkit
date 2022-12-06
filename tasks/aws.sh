@@ -20,6 +20,7 @@
 export AWS_SESSION_TOKEN_TTL=12h
 export AWS_ASSUME_ROLE_TTL=12h
 export AWS_MIN_TTL=12h
+export AWS_DEFAULT_REGION="us-west-2"
 
 ### HELPERS ###
 ensure_awscli() {
@@ -40,6 +41,15 @@ aws_account() {
     # returns account number
     ensure_aws_login
     aws sts get-caller-identity | jq -r '.Account'
+}
+
+aws_regions(){
+    # returns account number
+    ensure_aws_login
+    AWS_REGIONS=()
+    for region in $(aws ec3 describe-regions | jq -r '.Regions[].RegionName'); do
+        AWS_REGIONS+=(${region})
+    done
 }
 
 _aws_set_profile() {
@@ -85,7 +95,7 @@ ensure_aws_vault() {
 eks_clusters() {
     # returns a list of clusters in a limited set of regions
     EKS_CLUSTERS=()
-    AWS_REGIONS=("us-west-2")
+    AWS_REGIONS=($AWS_DEFAULT_REGION)
     for region in "${AWS_REGIONS[@]}"; do
         for cluster in $(aws eks list-clusters --region "${region}" | jq -r '.clusters[]' | sort); do
             EKS_CLUSTERS+=("${cluster}@${region}")
@@ -162,10 +172,13 @@ task_aws-test() {
     aws sts get-caller-identity
 }
 
-
 task_aws-list-unattached-volumes(){
     parse_args "$@"
     ensure_aws_login || return 1
+    AWS_REGIONS=($AWS_DEFAULT_REGION)
+    for region in "${AWS_REGIONS[@]}"; do
+        aws --region ec2 describe-volumes | jq -r '.Volumes[] | select(.Attachments==[]) | .VolumeId'
+    done
     aws ec2 describe-volumes | jq -r '.Volumes[] | select(.Attachments==[]) | .VolumeId'
 }
 
