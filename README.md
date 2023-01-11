@@ -138,25 +138,3 @@ Type "YES" within 10s to proceed: YES
 I guess you're sure
 [13:05:54.010] Finished 'confirm_example' after 1.38 s
 ```
-
-* `spin`/`unspin`
-    * Provides a mini ascii spinner for to bracket long running tasks
-    * invoke `spin` before a long running task and invoke `unspin` following it.
-    * Example:
-```
-function task_spinner_example(){
-    DOC="Example task for 'spinner' and 'unspin'."
-    runner_colorize pink "Starting Sleep"
-    spinner
-    sleep 10
-    unspin
-    runner_colorize pint "Stopping"
-}
-```
-```
-▶ runner spin_example
-[13:13:00.809] Starting 'spin_example'...
-Starting Sleep
-Stopping
-[13:13:10.840] Finished 'spin_example' after 10.1 s
-```
