@@ -18,6 +18,7 @@
 # under the License.
 
 function task_git-open-repo(){
+    # shellcheck disable=SC2034
     DOC="Opens the web url of the repository you are currently in."
     git rev-parse --is-inside-work-tree > /dev/null || { runner_log_error "Not a git repo"; return 1; }
     url=https://$(git remote -v | head -n1 | awk '{ print $2 }' | sed 's/git\@//' | tr ":" "/" | sed 's/\.git//')

@@ -23,7 +23,8 @@ DEFAULT_TASK_LOCATIONS="$(pwd)"/tasks
 echo "## Paste this output into your shell files to be sourced at startup"
 echo "# This can be configured with environment variables"
 echo "export runner_file=$(pwd)/Runnerfile"
-echo "export RUNNER_TOOLKIT_TASK_LOCATIONS="${RUNNER_TOOLKIT_TASK_LOCATIONS:-$DEFAULT_TASK_LOCATIONS}
+# Colon delimited paths where task files are located
+echo "export RUNNER_TOOLKIT_TASK_LOCATIONS=${DEFAULT_TASK_LOCATIONS}:${RUNNER_TOOLKIT_TASK_LOCATIONS}"
 echo "eval \$(runner --completion=bash)"
 
 if [ -n "${RUNNER_TOOLKIT_ALIAS}" ]; then

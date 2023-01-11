@@ -48,7 +48,7 @@ aws_regions(){
     ensure_aws_login
     AWS_REGIONS=()
     for region in $(aws ec3 describe-regions | jq -r '.Regions[].RegionName'); do
-        AWS_REGIONS+=(${region})
+        AWS_REGIONS+=("${region}")
     done
 }
 
@@ -95,13 +95,43 @@ ensure_aws_vault() {
 eks_clusters() {
     # returns a list of clusters in a limited set of regions
     EKS_CLUSTERS=()
-    AWS_REGIONS=($AWS_DEFAULT_REGION)
+    AWS_REGIONS=("$AWS_DEFAULT_REGION")
     for region in "${AWS_REGIONS[@]}"; do
         for cluster in $(aws eks list-clusters --region "${region}" | jq -r '.clusters[]' | sort); do
             EKS_CLUSTERS+=("${cluster}@${region}")
         done
     done
 }
+
+eks_cluster_public_cidrs_holepunch(){
+    
+    MY_IP="$(curl -s ipinfo.io/ip)"
+    CIDR_FILE=$(mktemp)
+    aws eks describe-cluster --name "${CLUSTER}" | jq -r  '.cluster.resourcesVpcConfig.publicAccessCidrs[]' > "${CIDR_FILE}"
+    if [ "${1}" == "add" ]; then
+        grep -q "${MY_IP}" "${CIDR_FILE}" && { runner_log_notice "${MY_IP} already present in publicAccessCidrs" ; return; }
+        grep -q "0.0.0.0/0" "${CIDR_FILE}" && { runner_log_notice "0.0.0.0/0 present in publicAccessCidrs" ; return; }
+        runner_log_notice "Adding ${MY_IP} to publicAccessCidrs."
+        echo "${MY_IP}/32" >> "${CIDR_FILE}"
+        
+        NEW_CIDRS="$(comma_delimited_string_from_file "${CIDR_FILE}")"
+        aws eks update-cluster-config --name "${CLUSTER}" --resources-vpc-config publicAccessCidrs="${NEW_CIDRS}"
+
+    elif [ "${1}" == "remove" ] ; then
+
+        grep -q "${MY_IP}" "${CIDR_FILE}" || { runner_log_notice "${MY_IP} not present in publicAccessCidrs" ; return; }
+        runner_log_notice "Removing ${MY_IP} from publicAccessCidrs."
+        # Remove the line from the file with my IP in it
+        sed -i .bak "/${MY_IP}\/32/d" "${CIDR_FILE}"
+
+        NEW_CIDRS="$(comma_delimited_string_from_file "${CIDR_FILE}")"
+        aws eks update-cluster-config --name "${CLUSTER}" --resources-vpc-config publicAccessCidrs="${NEW_CIDRS}"
+    fi
+    
+    # Best effort cleanup CIDR_FILE and the .back from the in place sed
+    rm "${CIDR_FILE}" 2>/dev/null || true
+    rm "${CIDR_FILE}.bak" 2>/dev/null || true
+ }
 
 ### TASKS ###
 
@@ -155,12 +185,18 @@ task_aws-eks-cluster-auth() {
         REGION=$(echo "${cluster_region}" | awk -F'@' '{ print $2 }')
         export AWS_DEFAULT_REGION=${REGION}
         export AWS_REGION=${REGION}
+        
+        eks_cluster_public_cidrs_holepunch add
+        
         echo "Setting Context ${CLUSTER} in and Region ${REGION}"
         export KUBECONFIG=~/.kube/${CLUSTER}
         cmd="aws eks update-kubeconfig --name ${CLUSTER} --alias ${CLUSTER}"
         $cmd
         chmod 600 "${KUBECONFIG}"
         $SHELL #Drops into new shell here so it ensure the right kubeconfig is set
+        
+        eks_cluster_public_cidrs_holepunch remove
+        
         break
     done
 }
@@ -175,7 +211,7 @@ task_aws-test() {
 task_aws-list-unattached-volumes(){
     parse_args "$@"
     ensure_aws_login || return 1
-    AWS_REGIONS=($AWS_DEFAULT_REGION)
+    AWS_REGIONS=("$AWS_DEFAULT_REGION")
     for region in "${AWS_REGIONS[@]}"; do
         aws --region ec2 describe-volumes | jq -r '.Volumes[] | select(.Attachments==[]) | .VolumeId'
     done
@@ -183,9 +219,10 @@ task_aws-list-unattached-volumes(){
 }
 
 task_aws-remove-unattached-volumes(){
+    DOC="Deletes Unnattached Volumes"
     parse_args "$@"
     ensure_aws_login || return 1
-    for vol in $(aws ec2 describe-volumes | jq -r '.Volumes[] | select(.Attachments==[]) | .VolumeId'); do echo $vol; aws ec2 delete-volume --volume-id="${vol}"; done
+    for vol in $(aws ec2 describe-volumes | jq -r '.Volumes[] | select(.Attachments==[]) | .VolumeId'); do echo "${vol}"; aws ec2 delete-volume --volume-id="${vol}"; done
 }
 
 task_aws-s3-bucket-destroy() {
@@ -196,88 +233,33 @@ task_aws-s3-bucket-destroy() {
     confirm "${BUCKET} infrastructure bucket destroy: "
     ensure_aws_login || return 1
 
-    aws s3 ls s3://${BUCKET} || exit 0 &&
-        aws s3api list-object-versions --bucket ${BUCKET} | jq -r '.Versions[] | .VersionId + " " + .Key' >|.tmp &&
-        while read version; do
-            echo $version
-            vid=$(echo $version | awk '{ print $1 }')
-            key=$(echo $version | awk '{ print $2 }')
-            aws s3api delete-object --bucket ${BUCKET} --version-id ${vid} --key ${key}
+    aws s3 ls "s3://${BUCKET}" || exit 0 &&
+        aws s3api list-object-versions --bucket "${BUCKET}" | jq -r '.Versions[] | .VersionId + " " + .Key' >|.tmp &&
+        while read -r version; do
+            echo "${version}"
+            vid=$(echo "${version}" | awk '{ print $1 }')
+            key=$(echo "${version}" | awk '{ print $2 }')
+            aws s3api delete-object --bucket "${BUCKET}" --version-id "${vid}" --key "${key}"
         done <.tmp &&
         rm .tmp &&
-        aws s3api list-object-versions --bucket ${BUCKET} | jq -r '.DeleteMarkers[] | .VersionId + " " + .Key' >|.tmp &&
-        while read version; do
-            echo $version
-            vid=$(echo $version | awk '{ print $1 }')
-            key=$(echo $version | awk '{ print $2 }')
-            aws s3api delete-object --bucket ${BUCKET} --version-id ${vid} --key ${key}
+        aws s3api list-object-versions --bucket "${BUCKET}" | jq -r '.DeleteMarkers[] | .VersionId + " " + .Key' >|.tmp &&
+        while read -r version; do
+            echo "${version}"
+            vid=$(echo "${version}" | awk '{ print $1 }')
+            key=$(echo "${version}" | awk '{ print $2 }')
+            aws s3api delete-object --bucket "${BUCKET}" --version-id "${vid}" --key "${key}"
             echo $?
         done <.tmp &&
         rm .tmp &&
-        aws s3api delete-bucket --bucket ${BUCKET}
+        aws s3api delete-bucket --bucket "${BUCKET}"
 }
 
 task_aws-instanceid-from-private-dns(){
+    # shellcheck disable=SC2034 # not sure why these show as unused but others do not
     DOC="Retrieves the Instance ID from the Private DNS name of the host. Usefule for Kubectl get nodes. "
     DNSNAME=${DNSNAME:-${runner_extra_args[0]}}
     parse_args "$@"
+    # shellcheck disable=SC2034
     required_vars=('DNSNAME')
-    aws ec2 describe-instances | jq -r '.Reservations[].Instances[] | select( .PrivateDnsName == "'$DNSNAME'")'
+    aws ec2 describe-instances | jq -r '.Reservations[].Instances[] | select( .PrivateDnsName == "'"${DNSNAME}"'")'
 }
-
-task_aws-generate-sso-profiles(){
-
-  config_file="$HOME/.aws/config.generated"
-  rm $config_file || true
-  echo "# Auto Generated by ravn " > $config_file
-
-cat << EOF >> $config_file
-[default]
-region=us-west-2
-output=json
-
-[profile root]
-sso_start_url = https://openraven.awsapps.com/start
-sso_region = us-east-1
-sso_account_id = 487193801865
-sso_role_name = AdministratorAccess
-
-
-EOF
-
-  export AWS_PROFILE='root'
-  ensure_aws_login || return 1
-  yawsso --profile "root"
-
-  for account in $(aws organizations list-accounts | jq -r '.Accounts[] | @base64'); do
-
-    account_name=$(echo $account | base64 -d | jq -r '.Name' | tr '[:upper:]' '[:lower:]' | tr ' ' '-'  | tr -cd '[:alnum:]._-')
-    account_id=$(echo $account | base64 -d | jq -r '.Id')
-
-    cat << EOF >> $config_file
-
-[profile $account_name]
-sso_start_url = https://openraven.awsapps.com/start
-sso_region = us-east-1
-sso_account_id = $account_id
-sso_role_name = AdministratorAccess
-
-EOF
-
-  done
-  mv $config_file $HOME/.aws/config
-}
-
-# task_use-eks-cluster(){
-#     parse_args "$@"
-#     ensure_aws_login || return 1
-#     set -e
-#     KUBECONFIG="$(mktemp)"
-#     export KUBECONFIG
-#     cp ~/.kube/config "$KUBECONFIG"
-#     context=$(select_from_with_grep "kubectl config get-contexts  --output=name" ${runner_extra_args[0]})
-#     kubectl config use-context "${context}"
-#     set +e
-#     $SHELL
-#     rm "$KUBECONFIG" 2> /dev/null
-# }

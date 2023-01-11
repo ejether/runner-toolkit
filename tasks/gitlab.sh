@@ -1,3 +1,22 @@
+#!/usr/bin/env bash
+
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#  http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 gitlab_api_call(){
   curl -s -H "PRIVATE-TOKEN: $GITLAB_TOKEN" \
   "https://gitlab.com/api/v4/${1}"
@@ -90,6 +109,7 @@ output_group_project_var(){
 gitlab_pre_tf(){
   ENV=$(basename "$(pwd)")
   if [[ -e "${ENV}.env" ]]; then
+    # shellcheck disable=SC1090  # Unused variables left for readability
     source  "${ENV}.env"
   fi
   default_state_name="$(gitlab_project_name)-${ENV}"
@@ -114,7 +134,7 @@ task_gitlab-tf-init(){
     RECONFIGURE_ARG="-reconfigure"
   fi
 
-  terraform init ${RECONFIGURE_ARG} \
+  terraform init "${RECONFIGURE_ARG}" \
     -backend-config="address=https://gitlab.com/api/v4/projects/${TF_PROJECT_ID}/terraform/state/${TF_STATE_NAME}" \
     -backend-config="lock_address=https://gitlab.com/api/v4/projects/${TF_PROJECT_ID}/terraform/state/${TF_STATE_NAME}/lock" \
     -backend-config="unlock_address=https://gitlab.com/api/v4/projects/${TF_PROJECT_ID}/terraform/state/${TF_STATE_NAME}/lock" \

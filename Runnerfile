@@ -56,15 +56,15 @@ task_help() {
 }
 
 task_show-task() {
+    # shellcheck disable=SC2034
     DOC="Output the body of the specified task. Specify the task in question with '--task=<name>'"
 
-    parse_args $@
+    parse_args "$@"
     required_vars=( 'TASK' )
     check_required_vars || return
 
-    files_to_check+=(ls $(dirname ${BASH_SOURCE[0]})/*.sh)
-
-    type task_$TASK
+    # shellcheck disable=SC2153
+    type "task_${TASK}"
 }
 
 ### GLOBAL HELPER FUNCTIONS ###
@@ -110,11 +110,11 @@ select_from_with_grep(){
   term="$2"
 
   if [[ -n "$term" ]]; then
-      list=$(eval $command | grep $term)
+      list=$(eval "${command}" | grep "${term}")
     else
-      list=$(eval $command)
+      list=$(eval "${command}")
     fi
-    count=$(echo $list | wc -w)
+    count=$(echo "${list}" | wc -w)
     if [[ "${count}" -eq 1 ]]; then
       item="$list"
     else
@@ -134,7 +134,8 @@ check_required_vars() {
         if [ -z "${tmp_var}" ]; then
             if true; then #Prompt for missing required vars. Logic left as handle
                 runner_colorize green "Enter ${var}:"
-                read $(echo ${var})
+                #read -r "$(echo "${var}")"
+                read -r "${var?}"
             else
               # ,, here changes to lowercase for user output
               runner_log_error "Missing argument --${var,,}"
@@ -148,8 +149,7 @@ check_required_vars() {
     fi
 }
 
-
-function confirm() {
+confirm() {
     # Provides a `confirm` function.
     if [ "${YES}" = true ]; then
         echo "Skipping confirmation due to \${YES}"
@@ -164,33 +164,20 @@ function confirm() {
     fi
 }
 
-function spinner()
-{
-  spinner="/|\\-/|\\-"
-  while :
-  do
-    for i in `seq 0 7`
-    do
-      #echo -n "${spinner:$i:1}"
-      printf "\e[1;34m${spinner:$i:1}\e[0m"
-      echo -en "\010"
-      sleep 1
-    done
-  done
-}
-
-function spin(){
-    # Start the Spinner:
-    spinner &
-    # Make a note of its Process ID (PID):
-    export SPIN_PID=$!
-    # Kill the spinner on any signal, including our own exit.
-    trap "kill -9 $SPIN_PID" `seq 0 15`
-}
-
-function unspin(){
+unspin(){
   # Remove spinner
-  kill -9 $SPIN_PID
+  kill -9 "${SPIN_PID}"
+}
+
+comma_delimited_string_from_file(){
+  FILE="${1}"
+  NEW_STRING=""
+  while read -r LINE; do
+      NEW_STRING="${NEW_STRING}${LINE},"
+  done < "${FILE}";
+  # Trim the last comma and close the squarebrace
+  NEW_STRING="${NEW_STRING::-1}"
+  echo "${NEW_STRING}"
 }
 
 ### Override Runner Standard Functions
@@ -199,8 +186,9 @@ function unspin(){
 
 ## Logs a message with a timestamp to stderr (instead of stdout)
 # This allows easy piping of task output into other commands
-function runner_log() {
-  local timestamp="$(runner_date +%T.%3N)"
+runner_log() {
+  local timestamp
+  timestamp="$(runner_date +%T.%3N)"
   echo "[$(runner_colorize gray "${timestamp}")] ${*}" >&2;
 }
 
@@ -211,10 +199,10 @@ function runner_log() {
 # If location is a directory, source all the files
 # If location is a file source it.
 # Using sed to replace `:` so we don't mess with IFS so the `for files` works below
-for LOCATION in $(echo $RUNNER_TOOLKIT_TASK_LOCATIONS | sed 's/:/ /'); do
+for LOCATION in ${RUNNER_TOOLKIT_TASK_LOCATIONS/":"/" "}; do
     if [ -d "${LOCATION}" ]; then
-        for FILE in $(ls ${LOCATION}); do
-            source "${LOCATION}/${FILE}"
+        for FILE in "${LOCATION}"/*; do
+            source "${FILE}"
         done
     elif [ -f "${LOCATION}" ]; then
         source "${LOCATION}"
@@ -224,7 +212,8 @@ done
 # Always source a runner file if there is one where the command is run.
 # As long as the ./Runnerfile and this file are not the same file
 if [ -f "./Runnerfile" ]; then
-    cmp --silent "${BASH_SOURCE[0]}" ./Runnerfile || source ./Runnerfile
+  # shellcheck disable=SC1091
+  cmp --silent "${BASH_SOURCE[0]}" ./Runnerfile || source ./Runnerfile
 fi
 
 declare -a runner_extra_args=()
@@ -233,6 +222,7 @@ runner_bootstrap() {
   ## Clear a trap we set up earlier
   trap - EXIT
   ## Parse arguments
+  # shellcheck disable=SC2154
   for arg in "${runner_args[@]+"${runner_args[@]}"}"; do
     if [[ ${arg} == -* ]]; then
       runner_flags+=("${arg}")
@@ -247,6 +237,7 @@ runner_bootstrap() {
     runner_sequence "${runner_tasks[@]}" || exit ${?}
     return 0
   fi
+  # shellcheck disable=SC2154
   if runner_is_task_defined "${runner_default_task}"; then
     runner_run_task "${runner_default_task}" || exit ${?}
     return 0

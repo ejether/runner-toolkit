@@ -26,6 +26,7 @@ function task_parse_args_example(){
 
 function task_required_args_example(){
     DOC="Example task for 'check_required_args'. Requires --foo and --baz."
+    # shellcheck disable=SC2034
     required_vars=('FOO' 'BAZ')
     parse_args "$@"
     # return 1 is required here for runner to exit with error
@@ -43,6 +44,7 @@ function task_confirm_example(){
 }
 
 function task_spin_example(){
+    # shellcheck disable=SC2034 
     DOC="Example task for 'spinner' and 'unspin'."
     runner_colorize pink "Starting Sleep"
     spin
