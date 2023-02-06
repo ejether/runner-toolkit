@@ -17,71 +17,71 @@
 # specific language governing permissions and limitations
 # under the License.
 
-gitlab_api_call(){
+gitlab_api_call() {
   curl -s -H "PRIVATE-TOKEN: $GITLAB_TOKEN" \
-  "https://gitlab.com/api/v4/${1}"
+    "https://gitlab.com/api/v4/${1}"
 }
 
-gitlab_project_name(){
+gitlab_project_name() {
   git remote -v | head -n1 | awk '{ print $2 }' | sed 's/git\@//' | tr ":" "/" | sed 's/\.git//' | sed 's/gitlab.com\///' | sed 's/\//%2F/g'
 }
 
-gitlab_project_id(){
+gitlab_project_id() {
   gitlab_api_call "projects/$(gitlab_project_name)" | jq -r '.id'
 }
 
-task_gitlab-groups(){
+task_gitlab-groups() {
   gitlab_api_call "groups"
 }
 
 # shellcheck disable=SC2120
-task_gitlab-group-projects(){
+task_gitlab-group-projects() {
   parse_args "$@"
   required_vars=('GROUP_ID')
   check_required_vars || return 1
   gitlab_api_call "groups/${GROUP_ID}" | jq '.projects  '
 }
 
-task_gitlab-project(){
+task_gitlab-project() {
   parse_args "$@"
   required_vars=('PROJECT_ID')
   check_required_vars || return 1
   gitlab_api_call "projects/${PROJECT_ID}"
 }
 
-task_gitlab-project-id(){
+task_gitlab-project-id() {
   gitlab_project_id
 }
 
-task_gitlab-group(){
+task_gitlab-group() {
   parse_args "$@"
   required_vars=('GROUP_ID')
   check_required_vars || return 1
   gitlab_api_call "groups/${GROUP_ID}"
 }
 
-task_gitlab-project-variables(){
+task_gitlab-project-variables() {
   parse_args "$@"
   required_vars=('PROJECT_ID')
   check_required_vars || return 1
   gitlab_api_call "projects/${PROJECT_ID}/variables"
 }
 
-task_gitlab-group-variables(){
+task_gitlab-group-variables() {
   parse_args "$@"
   required_vars=('GROUP_ID')
   check_required_vars || return 1
   gitlab_api_call "groups/${GROUP_ID}/variables"
 }
 
-task_gitlab-project-variable(){
+task_gitlab-project-variable() {
   parse_args "$@"
   required_vars=('PROJECT_ID' 'VARIABLE_KEY')
   check_required_vars || return 1
   gitlab_api_call "projects/${PROJECT_ID}/variables/${VARIABLE_KEY}"
 }
 
-task_gitlab-group-variable(){
+task_gitlab-group-variable() {
   parse_args "$@"
   # shellcheck disable=SC2034
   required_vars=('GROUP_ID' 'VARIABLE_KEY')
@@ -89,9 +89,9 @@ task_gitlab-group-variable(){
   gitlab_api_call "groups/${GROUP_ID}/variables/${VARIABLE_KEY}"
 }
 
-task_gitlab-get-all-aws-key-ids(){
+task_gitlab-get-all-aws-key-ids() {
   echo GROUP_ID, PROJECT_ID, KEY_ID
-  for GROUP_ID in $(task_gitlab-groups | jq -r  '.[].id'); do
+  for GROUP_ID in $(task_gitlab-groups | jq -r '.[].id'); do
     PROJECT_ID="None"
     output_group_project_var "$(task_gitlab-group-variable --variable-key=AWS_ACCESS_KEY_ID | jq '.value')"
     for PROJECT_ID in $(task_gitlab-group-projects | jq -r '.[].id'); do
@@ -100,24 +100,24 @@ task_gitlab-get-all-aws-key-ids(){
   done
 }
 
-output_group_project_var(){
+output_group_project_var() {
   if [ "${1}" != 'null' ]; then
-  echo "$GROUP_ID, $PROJECT_ID, ${1}"
+    echo "$GROUP_ID, $PROJECT_ID, ${1}"
   fi
 }
 
-gitlab_pre_tf(){
+gitlab_pre_tf() {
   ENV=$(basename "$(pwd)")
   if [[ -e "${ENV}.env" ]]; then
     # shellcheck disable=SC1090  # Unused variables left for readability
-    source  "${ENV}.env"
+    source "${ENV}.env"
   fi
   default_state_name="$(gitlab_project_name)-${ENV}"
   TF_STATE_NAME=${TF_STATE_NAME:-${default_state_name}}
   export TF_STATE_NAME
 }
 
-task_gitlab-tf-init(){
+task_gitlab-tf-init() {
 
   TF_PROJECT_ID=$(gitlab_project_id)
   parse_args "$@"
@@ -145,7 +145,7 @@ task_gitlab-tf-init(){
     -backend-config="retry_wait_min=5"
 }
 
-task_gitlab-tf-plan(){
+task_gitlab-tf-plan() {
   gitlab_pre_tf
   terraform plan
 }

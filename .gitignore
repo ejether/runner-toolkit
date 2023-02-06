@@ -27,3 +27,4 @@ Temporary Items
 # Zsh compiled script + zrecompile backup
 *.zwc
 *.zwc.old
+.idea

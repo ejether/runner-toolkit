@@ -17,6 +17,6 @@
 # specific language governing permissions and limitations
 # under the License.
 
-task_kshell(){
-   kubectl run -i --tty kshell --image=alpine --restart=Never -- /bin/sh
+task_kshell() {
+  kubectl run -i --tty kshell --image=alpine --restart=Never -- /bin/sh
 }
